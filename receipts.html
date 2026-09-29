@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a37">
+<meta name="robots" content="noindex">
+<title>Haggerty Field Receipts</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f3f4f6; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+    --brand:#1f2a37; --accent:#d97706; --ok:#047857; --warn:#b45309; --bad:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  header{background:var(--brand);color:#fff;padding:14px 16px calc(14px) ;padding-top:max(14px,env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between}
+  header h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+  header .who{font-size:13px;opacity:.85}
+  header button{background:none;border:0;color:#fff;font-size:13px;text-decoration:underline;padding:4px}
+  main{max-width:560px;margin:0 auto;padding:16px 16px 48px}
+  .card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  h2{font-size:15px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+  label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}
+  label .opt{font-weight:400;color:var(--muted)}
+  input,select,textarea{width:100%;font-size:16px;padding:12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:var(--ink)}
+  textarea{min-height:64px;resize:vertical}
+  .row{display:flex;gap:10px}.row>div{flex:1;min-width:0}
+  .btn{display:block;width:100%;padding:15px;border:0;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-dark{background:var(--brand);color:#fff}
+  .btn-ghost{background:#fff;color:var(--brand);border:2px solid var(--brand)}
+  .btn:disabled{opacity:.5}
+  .btns{display:flex;gap:10px}.btns .btn{flex:1}
+  .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .thumb{position:relative;aspect-ratio:3/4;border-radius:8px;overflow:hidden;background:#e5e7eb}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb .pdf{display:flex;align-items:center;justify-content:center;height:100%;font-weight:700;color:var(--muted);text-align:center;padding:6px;font-size:13px;word-break:break-all}
+  .thumb button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:28px;padding:0}
+  .thumb .n{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;padding:1px 6px;border-radius:10px}
+  .hint{color:var(--muted);font-size:13px;margin-top:6px}
+  .err{color:var(--bad);font-size:14px;margin-top:10px;min-height:1em}
+  .pay{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .pay label{margin:0;font-weight:500;border:1px solid #d1d5db;border-radius:8px;padding:11px 10px;display:flex;gap:8px;align-items:center;font-size:14px;background:#fff}
+  .pay input{width:auto;margin:0}
+  .pay label:has(input:checked){border-color:var(--accent);background:#fffbeb}
+  .banner{border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14px}
+  .banner.ok{background:#ecfdf5;color:var(--ok)} .banner.warn{background:#fffbeb;color:var(--warn)} .banner.bad{background:#fef2f2;color:var(--bad)}
+  .list{list-style:none;margin:0;padding:0}
+  .list li{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .list li:last-child{border-bottom:0}
+  .list .top{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+  .list .sub{color:var(--muted);font-size:12px;margin-top:2px;word-break:break-all}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap}
+  .pill.synced{background:#d1fae5;color:var(--ok)} .pill.pending{background:#fef3c7;color:var(--warn)} .pill.error{background:#fee2e2;color:var(--bad)} .pill.queued{background:#e5e7eb;color:#374151}
+  .hidden{display:none!important}
+  .center{text-align:center}
+  .busy{position:fixed;inset:0;background:rgba(17,24,39,.55);display:flex;align-items:center;justify-content:center;z-index:10}
+  .busy div{background:#fff;padding:18px 22px;border-radius:12px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Field Receipts</h1>
+    <div class="who" id="who"></div>
+  </div>
+  <button id="logoutBtn" class="hidden">Sign out</button>
+</header>
+
+<main>
+  <!-- Sign in -->
+  <section id="loginView" class="card hidden">
+    <h2>Sign in</h2>
+    <label for="codeInput">Access code</label>
+    <input id="codeInput" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="From the office">
+    <div class="err" id="loginErr"></div>
+    <button class="btn btn-dark" id="loginBtn">Sign in</button>
+    <p class="hint">This phone will stay signed in.</p>
+  </section>
+
+  <!-- Capture -->
+  <section id="appView" class="hidden">
+    <div id="queueBanner" class="banner warn hidden"></div>
+    <div id="doneBanner" class="banner ok hidden"></div>
+
+    <div class="card">
+      <h2>1. Receipt</h2>
+      <div class="btns">
+        <button class="btn btn-primary" id="camBtn">Take photo</button>
+        <button class="btn btn-ghost" id="fileBtn">Upload file</button>
+      </div>
+      <input type="file" id="camInput" accept="image/*" capture="environment" class="hidden">
+      <input type="file" id="fileInput" accept="image/*,application/pdf" multiple class="hidden">
+      <div class="thumbs" id="thumbs"></div>
+      <p class="hint" id="pageHint">Long receipt? Take one photo per section. They are combined into one PDF.</p>
+    </div>
+
+    <div class="card">
+      <h2>2. Details</h2>
+      <label for="po">PO number</label>
+      <input id="po" inputmode="text" autocapitalize="characters" autocomplete="off" placeholder="From BuildOps">
+
+      <label for="vendor">Vendor</label>
+      <input id="vendor" placeholder="Home Depot, Sunbelt, Chevron..." autocomplete="off" autocapitalize="words">
+
+      <label for="amount">Total $</label>
+      <input id="amount" inputmode="decimal" placeholder="0.00" autocomplete="off">
+
+      <label for="note">Note <span class="opt">(optional)</span></label>
+      <textarea id="note" maxlength="500" placeholder="What was it for?"></textarea>
+
+      <div class="err" id="formErr"></div>
+      <button class="btn btn-dark" id="submitBtn">Send to J: drive</button>
+    </div>
+
+    <div class="card">
+      <h2>Recent</h2>
+      <div id="officeStatus" class="hint"></div>
+      <ul class="list" id="history"></ul>
+      <button class="btn btn-ghost" id="refreshBtn" style="margin-top:10px">Refresh</button>
+    </div>
+  </section>
+</main>
+
+<div class="busy hidden" id="busy"><div id="busyText">Working...</div></div>
+
+<script>
+// ================= CONFIG =================
+const FN_URL = 'https://tdflgfuqjnwctadsjizz.supabase.co/functions/v1/receipts';
+const MAX_EDGE = 1800;      // px, longest side of each photo
+const JPEG_Q = 0.72;
+// ==========================================
+
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k){ try{ return localStorage.getItem(k) }catch{ return null } },
+  set(k,v){ try{ localStorage.setItem(k,v) }catch{} },
+  del(k){ try{ localStorage.removeItem(k) }catch{} },
+};
+let CODE = store.get('rcpt_code') || '';
+let pages = [];       // {kind:'img', blob, url} | {kind:'pdf', blob, name}
+let processing = false;
+
+// ---------- API ----------
+async function api(action, payload = {}) {
+  const res = await fetch(FN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, code: CODE, ...payload }),
+  });
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok) { const e = new Error(data.error || `Error ${res.status}`); e.status = res.status; throw e; }
+  return data;
+}
+
+// ---------- offline queue (IndexedDB) ----------
+function idb() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open('haggerty-receipts', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('queue', { keyPath: 'id' });
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+async function qTx(mode, fn) {
+  const db = await idb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('queue', mode);
+    const out = fn(tx.objectStore('queue'));
+    tx.oncomplete = () => resolve(out && out.result !== undefined ? out.result : undefined);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+const qPut = (item) => qTx('readwrite', (s) => s.put(item));
+const qDel = (id) => qTx('readwrite', (s) => s.delete(id));
+const qAll = () => qTx('readonly', (s) => s.getAll());
+
+// ---------- sign in ----------
+async function login(code) {
+  CODE = code.trim().toUpperCase();
+  const data = await api('login');
+  store.set('rcpt_code', CODE);
+  $('who').textContent = data.person.name;
+  show('app');
+}
+
+function show(view) {
+  $('loginView').classList.toggle('hidden', view !== 'login');
+  $('appView').classList.toggle('hidden', view !== 'app');
+  $('logoutBtn').classList.toggle('hidden', view !== 'app');
+  if (view === 'app') { resetForm(); refreshHistory(); processQueue(); }
+}
+
+$('loginBtn').onclick = async () => {
+  $('loginErr').textContent = '';
+  const c = $('codeInput').value;
+  if (c.trim().length < 6) { $('loginErr').textContent = 'Enter your access code.'; return; }
+  busy('Signing in...');
+  try { await login(c); } catch (e) { $('loginErr').textContent = e.message; }
+  busy(false);
+};
+$('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('loginBtn').click(); });
+$('logoutBtn').onclick = () => {
+  if (!confirm('Sign out of receipts on this phone?')) return;
+  store.del('rcpt_code'); CODE = ''; $('who').textContent = ''; show('login');
+};
+
+// ---------- capture ----------
+$('camBtn').onclick = () => $('camInput').click();
+$('fileBtn').onclick = () => $('fileInput').click();
+$('camInput').onchange = (e) => addFiles(e.target.files, e.target);
+$('fileInput').onchange = (e) => addFiles(e.target.files, e.target);
+
+async function addFiles(files, input) {
+  for (const f of files) {
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+      if (pages.length) { alert('A PDF has to be sent by itself. Remove the photos first, or send them separately.'); continue; }
+      pages = [{ kind: 'pdf', blob: f, name: f.name }];
+      break;
+    }
+    if (pages.some(p => p.kind === 'pdf')) { alert('Remove the PDF first to add photos.'); break; }
+    try {
+      const blob = await shrink(f);
+      pages.push({ kind: 'img', blob, url: URL.createObjectURL(blob) });
+    } catch { alert('Could not read that photo. Try again.'); }
+  }
+  input.value = '';
+  drawThumbs();
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    img.src = url;
+  });
+}
+async function shrink(file) {
+  const img = await loadImage(file);
+  const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return new Promise((res) => c.toBlob(res, 'image/jpeg', JPEG_Q));
+}
+
+function drawThumbs() {
+  $('thumbs').innerHTML = '';
+  pages.forEach((p, i) => {
+    const d = document.createElement('div'); d.className = 'thumb';
+    d.innerHTML = p.kind === 'img'
+      ? `<img src="${p.url}" alt="Page ${i + 1}"><span class="n">${i + 1}</span>`
+      : `<div class="pdf">PDF<br>${esc(p.name)}</div>`;
+    const x = document.createElement('button'); x.textContent = '×'; x.setAttribute('aria-label', 'Remove');
+    x.onclick = () => { if (p.url) URL.revokeObjectURL(p.url); pages.splice(i, 1); drawThumbs(); };
+    d.appendChild(x); $('thumbs').appendChild(d);
+  });
+  $('camBtn').textContent = pages.length && pages[0].kind === 'img' ? 'Add another page' : 'Take photo';
+}
+
+// ---------- build one PDF from the photos ----------
+async function buildPdf() {
+  const { jsPDF } = window.jspdf;
+  let doc = null;
+  for (const p of pages) {
+    const dataUrl = await blobToDataUrl(p.blob);
+    const img = await loadImage(p.blob);
+    const w = 612, h = Math.round(612 * img.naturalHeight / img.naturalWidth);
+    const orient = w > h ? 'l' : 'p';
+    if (!doc) doc = new jsPDF({ unit: 'pt', format: [w, h], orientation: orient, compress: true });
+    else doc.addPage([w, h], orient);
+    doc.addImage(dataUrl, 'JPEG', 0, 0, w, h, undefined, 'FAST');
+  }
+  return doc.output('blob');
+}
+function blobToDataUrl(b) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+}
+
+// ---------- submit ----------
+function resetForm() {
+  pages.forEach(p => p.url && URL.revokeObjectURL(p.url));
+  pages = []; drawThumbs();
+  ['po', 'vendor', 'amount', 'note'].forEach(id => $(id).value = '');
+  $('formErr').textContent = '';
+}
+
+$('submitBtn').onclick = async () => {
+  $('formErr').textContent = '';
+  const meta = {
+    po_number: $('po').value.trim(),
+    vendor: $('vendor').value.trim(),
+    amount: $('amount').value.replace(/[$,\s]/g, ''),
+    purchase_date: localDate(),
+    note: $('note').value.trim(),
+  };
+  const miss = [];
+  if (!pages.length) miss.push('a photo or file');
+  if (!/[0-9A-Za-z]/.test(meta.po_number)) miss.push('PO number');
+  if (!meta.vendor) miss.push('vendor');
+  if (!/^\d+(\.\d{1,2})?$/.test(meta.amount)) miss.push('total');
+  if (miss.length) { $('formErr').textContent = 'Missing: ' + miss.join(', ') + '.'; return; }
+
+  busy('Preparing receipt...');
+  try {
+    let blob, ext;
+    if (pages[0].kind === 'pdf') { blob = pages[0].blob; ext = 'pdf'; }
+    else { blob = await buildPdf(); ext = 'pdf'; }
+    if (blob.size > 24 * 1024 * 1024) throw new Error('File is over 24 MB. Use fewer pages.');
+    const item = {
+      id: crypto.randomUUID(), ext, blob, page_count: pages.length,
+      meta: { ...meta, amount: Number(meta.amount) }, queued_at: new Date().toISOString(),
+    };
+    await qPut(item);
+    resetForm();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    busy('Uploading...');
+    await processQueue();
+  } catch (e) {
+    $('formErr').textContent = e.message || 'Something went wrong.';
+  }
+  busy(false);
+};
+
+async function sendOne(item) {
+  const { upload_url } = await api('start', { receipt_id: item.id, ext: item.ext });
+  const put = await fetch(upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': item.ext === 'pdf' ? 'application/pdf' : 'image/jpeg', 'x-upsert': 'true' },
+    body: item.blob,
+  });
+  if (!put.ok) throw new Error('Upload failed (' + put.status + ')');
+  return api('finish', { receipt_id: item.id, ext: item.ext, page_count: item.page_count, ...item.meta });
+}
+
+async function processQueue() {
+  if (processing || !CODE) return;
+  processing = true;
+  let sent = 0, lastPath = '', rejectMsg = '';
+  try {
+    const items = (await qAll()).sort((a, b) => a.queued_at.localeCompare(b.queued_at));
+    for (const it of items) {
+      try {
+        const r = await sendOne(it);
+        await qDel(it.id); sent++; lastPath = r.j_path;
+      } catch (e) {
+        if (e.status === 400) {           // bad data: tell him, keep it so nothing is lost
+          rejectMsg = `A queued receipt was rejected: ${e.message} It is still saved on this phone. Call the office.`;
+        }
+        if (e.status === 401) { showBanner('bad', 'Access code no longer works. Call the office.'); break; }
+        if (!navigator.onLine || e instanceof TypeError) break;   // no signal, try later
+      }
+    }
+  } catch {}
+  processing = false;
+  await updateQueueBanner();
+  if (rejectMsg) showBanner('bad', rejectMsg);
+  if (sent) {
+    $('doneBanner').innerHTML = `<b>Sent ${sent === 1 ? '' : sent + ' receipts '}✓</b><br><span style="font-size:12px;word-break:break-all">${esc(lastPath)}</span>`;
+    $('doneBanner').classList.remove('hidden');
+    setTimeout(() => $('doneBanner').classList.add('hidden'), 8000);
+    refreshHistory();
+  }
+}
+
+async function updateQueueBanner() {
+  let n = 0; try { n = (await qAll()).length; } catch {}
+  if (!n) { $('queueBanner').classList.add('hidden'); return; }
+  $('queueBanner').className = 'banner warn';
+  $('queueBanner').innerHTML = `<b>${n} receipt${n > 1 ? 's' : ''} waiting for signal.</b> Saved on this phone. They send automatically when you have service, or <a href="#" id="retryLink">try now</a>.`;
+  $('retryLink').onclick = (e) => { e.preventDefault(); busy('Uploading...'); processQueue().finally(() => busy(false)); };
+}
+function showBanner(kind, msg) {
+  $('queueBanner').className = 'banner ' + kind; $('queueBanner').textContent = msg;
+}
+
+// ---------- history ----------
+async function refreshHistory() {
+  const queued = await qAll().catch(() => []);
+  let data = { receipts: [], office_last_seen: null };
+  try { data = await api('history'); } catch (e) { if (!queued.length) $('history').innerHTML = `<li class="sub">${esc(e.message)}</li>`; }
+  const rows = [
+    ...queued.map(q => ({ vendor: q.meta.vendor, amount: q.meta.amount, po_number: q.meta.po_number, purchase_date: q.meta.purchase_date, status: 'queued', j_path: 'Waiting for signal' })),
+    ...data.receipts,
+  ];
+  const label = { synced: 'On J:', pending: 'Uploaded', error: 'Problem', queued: 'On phone' };
+  $('history').innerHTML = rows.length ? rows.map(r => `
+    <li><div class="top"><span>${esc(r.vendor)} · $${Number(r.amount).toFixed(2)}</span><span class="pill ${r.status}">${label[r.status] || r.status}</span></div>
+    <div class="sub">PO ${esc(r.po_number)} · ${esc(r.purchase_date)}${r.status === 'synced' ? '<br>' + esc(r.j_path) : ''}</div></li>`).join('')
+    : '<li class="sub">No receipts yet.</li>';
+  if (data.office_last_seen) {
+    const mins = Math.round((Date.now() - new Date(data.office_last_seen)) / 60000);
+    $('officeStatus').textContent = mins <= 15 ? 'Office sync is running.' : `Office sync last ran ${mins < 120 ? mins + ' min' : Math.round(mins / 60) + ' hours'} ago. Uploaded receipts are safe and will copy to J: when it's back.`;
+  }
+}
+$('refreshBtn').onclick = () => { processQueue(); refreshHistory(); };
+
+// ---------- utils ----------
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function localDate() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function busy(t) { $('busy').classList.toggle('hidden', !t); if (t) $('busyText').textContent = t; }
+
+window.addEventListener('online', processQueue);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) processQueue(); });
+
+// ---------- boot ----------
+(async () => {
+  if (!CODE) { show('login'); return; }
+  busy('Loading...');
+  try { await login(CODE); }
+  catch (e) {
+    if (e.status === 401) { store.del('rcpt_code'); CODE = ''; show('login'); }
+    else {
+      // offline on open: let him still capture; lists fill in once online
+      $('who').textContent = 'Offline';
+      show('app');
+    }
+  }
+  busy(false);
+})();
+</script>
+</body>
+</html>
